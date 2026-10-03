@@ -69,7 +69,7 @@ To find a session's window it walks up the process tree from the Claude Code PID
 ## Development
 
 ```bash
-node --test tests/                          # Model.js
+node --test tests/*.test.js                 # Model.js
 python3 -m unittest discover -s tests       # claude_sessions.py
 uvx ruff check . && uvx ruff format --check .
 ```

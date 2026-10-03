@@ -19,4 +19,4 @@ jobs:
       - run: uvx ruff check .
       - run: uvx ruff format --check .
       - run: python3 -m unittest discover -s tests -v
-      - run: node --test tests/
+      - run: node --test tests/*.test.js

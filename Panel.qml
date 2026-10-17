@@ -30,7 +30,11 @@ Panel {
   readonly property color urgent: bar ? bar.urgent : Color.urgent
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
-  readonly property int pollMs: Math.max(500, parseInt(setting("pollMs", 1500), 10) || 1500)
+  // `claude_sessions.py watch` stays running and prints a line only when something changed
+  // (inotify), so nothing is re-spawned on a timer. If it dies it is restarted with backoff.
+  property int watchBackoff: 1000
+  property double watchStarted: 0
+  property bool watchRestartNow: false
 
   // Contextual visibility: the icon only takes bar space when it has something
   // to say, while its popup is open (summoned by hotkey/menu via IPC), or — for
@@ -48,7 +52,12 @@ Panel {
   }
   implicitHeight: button.implicitHeight
 
-  function refresh() { if (!listProcess.running) listProcess.running = true }
+  // Manual refresh ("r" in the popup): restart the watcher, which re-reads everything on start.
+  function refresh() {
+    if (!watcher.running) { restartTimer.stop(); watcher.running = true; return }
+    watchRestartNow = true
+    watcher.running = false
+  }
 
   function focusSession(s) {
     if (!s) return
@@ -67,28 +76,41 @@ Panel {
   onOpenedChanged: if (opened) {
     cursorActive = false
     cursor = 0
-    refresh()
+    now = Math.floor(Date.now() / 1000)
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
   onSessionsChanged: if (cursor >= sessions.length) cursor = Math.max(0, sessions.length - 1)
 
   Process {
-    id: listProcess
-    command: ["python3", root.helper, "list"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var d = Model.parse(text)
+    id: watcher
+    command: ["python3", root.helper, "watch"]
+    running: true
+    onRunningChanged: if (running) root.watchStarted = Date.now()
+    stdout: SplitParser {
+      onRead: function(line) {
+        var d = Model.parse(line)
         if (!d) return
         root.sessions = d.sessions
         root.now = d.now || Math.floor(Date.now() / 1000)
       }
     }
+    onExited: {
+      if (root.watchRestartNow) {
+        root.watchRestartNow = false
+        Qt.callLater(function() { watcher.running = true })
+        return
+      }
+      // A watcher that ran for a minute was healthy: start the backoff over.
+      if (Date.now() - root.watchStarted > 60000) root.watchBackoff = 1000
+      restartTimer.interval = root.watchBackoff
+      restartTimer.restart()
+      root.watchBackoff = Math.min(60000, root.watchBackoff * 2)
+    }
   }
+  Timer { id: restartTimer; repeat: false; onTriggered: watcher.running = true }
 
   Process { id: focusProcess; command: [] }
 
-  Timer { interval: root.pollMs; running: true; repeat: true; triggeredOnStart: true; onTriggered: root.refresh() }
   // Spin the bar 󰛄 while every session is working; settle upright otherwise.
   NumberAnimation on spinAngle {
     from: 0; to: 360; duration: 2400
@@ -102,9 +124,10 @@ Panel {
     repeat: true
     onTriggered: root.frame = (root.frame + 1) % Model.SPINNER.length
   }
+  // Ages ("waiting 12m") tick every second in the popup; the closed bar only needs them for its tooltip.
   Timer {
-    interval: 1000
-    running: root.opened
+    interval: root.opened ? 1000 : 30000
+    running: true
     repeat: true
     onTriggered: root.now = Math.floor(Date.now() / 1000)
   }

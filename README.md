@@ -41,7 +41,6 @@ Change them in the shell settings panel, or in the widget's entry in `~/.config/
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `contextual` | `true` | Hide the icon while no Claude Code session is running |
-| `pollMs` | `1500` | How often session files are re-read, in milliseconds |
 
 ## IPC
 
@@ -56,8 +55,10 @@ Bind `toggle` to a key in `~/.config/hypr/bindings.lua` if you prefer the keyboa
 ## How it works
 
 Claude Code keeps a small registry file for every running session in `~/.claude/sessions/<pid>.json`. The
-widget's helper, `claude_sessions.py`, reads those files, drops sessions whose process is gone, and takes the title,
-last prompt and context size from the tail of each session's transcript in `~/.claude/projects/`. Nothing leaves
+widget keeps one helper running, `claude_sessions.py watch`, which reads those files, drops sessions whose process is
+gone, and takes the title, last prompt and context size from the tail of each session's transcript in
+`~/.claude/projects/`. It then sleeps on inotify (and a pidfd per session) and prints a new line only when something
+changed, reading just the appended part of a transcript, so an idle bar costs no processes and no CPU. Nothing leaves
 your machine and nothing is written except a small title cache in `~/.cache/omarchy-claude-sessions/`.
 
 To find a session's window it walks up the process tree from the Claude Code PID until it reaches a PID that

@@ -20,7 +20,6 @@
     "allowMultiple": false,
     "defaultSection": "left",
     "defaults": {
-      "pollMs": 1500,
       "contextual": true
     },
     "schema": [
@@ -30,16 +29,6 @@
         "label": "Only show when there is something to show",
         "defaultValue": true,
         "description": "Hide the icon while no Claude Code session is running."
-      },
-      {
-        "key": "pollMs",
-        "type": "integer",
-        "label": "Refresh interval (ms)",
-        "min": 500,
-        "max": 10000,
-        "step": 250,
-        "defaultValue": 1500,
-        "description": "How often session files are re-read."
       }
     ]
   }
